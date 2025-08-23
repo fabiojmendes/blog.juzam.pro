@@ -1,6 +1,5 @@
 +++
 date = '2025-08-22T19:22:36-04:00'
-draft = true
 title = 'Managing my dotfiles'
 +++
 
