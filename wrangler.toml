@@ -1,5 +1,6 @@
 name = "blog-juzam-pro"
-compatibility_date = "2025-06-12"
+compatibility_date = "2025-04-01"
 
 [assets]
 directory = "./public"
+not_found_handling = "404-page"

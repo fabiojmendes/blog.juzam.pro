@@ -1,26 +1,30 @@
+# vim: tw=80
 baseURL = 'https://blog.juzam.pro/'
 languageCode = 'en-us'
 title = "The Learning Loop"
 theme = ["PaperMod"]
+keywords = ["blog", "hardware", "software", "programming languages"]
 
 [params]
-# ShowToc = true
+author = "Fabio"
 ShowShareButtons = true
 ShareButtons = ["linkedin", "twitter", "reddit", "bluesky"]
 ShowCodeCopyButtons = true
 
 [params.editPost]
-url = "https://github.com/fabiojmendes/blog.juzam.pro/content"
+url = "https://github.com/fabiojmendes/blog.juzam.pro/blob/master/content"
 text = "Suggest Changes"
 appendFilePath = true
+
+[params.cover]
+responsiveImages = false
 
 [params.homeInfoParams]
 title = "Hi there"
 content = """
 Welcome to my blog.
 
-Taking a page from swyx's book, I will use this space to
-[lean in public](https://www.swyx.io/learn-in-public).
+A space to talk about hardware, software, and techonology in general.
 """
 
 [[params.socialIcons]]
@@ -34,19 +38,18 @@ url = "https://github.com/fabiojmendes"
 [[menus.main]]
 name = 'Home'
 pageRef = '/'
-weight = 10
 [[menus.main]]
 name = 'Posts'
 pageRef = '/posts'
-weight = 20
 [[menus.main]]
 name = 'Search'
 pageRef = '/search'
-weight = 30
 [[menus.main]]
 name = 'Tags'
 pageRef = '/tags'
-weight = 40
+[[menus.main]]
+name = 'About'
+pageRef = '/about'
 
 [outputs]
 home = ["HTML", "RSS", "JSON"]

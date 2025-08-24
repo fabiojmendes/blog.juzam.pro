@@ -1,6 +1,9 @@
 +++
 date = '2025-08-22T19:22:36-04:00'
 title = 'Managing my dotfiles'
+tags = ["fishshell", "git", "terminal", "neovim"]
+[cover]
+image = "cover.png"
 +++
 
 This post describes the technique I use to organize my configuration files
