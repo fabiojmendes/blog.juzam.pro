@@ -3,10 +3,11 @@ baseURL = 'https://blog.juzam.pro/'
 languageCode = 'en-us'
 title = "The Learning Loop"
 theme = ["PaperMod"]
-keywords = ["blog", "hardware", "software", "programming languages"]
 
 [params]
 author = "Fabio"
+keywords = ["blog", "hardware", "software", "programming languages"]
+description = "A blog about techonology, hardware, software and programming languages"
 ShowShareButtons = true
 ShareButtons = ["linkedin", "twitter", "reddit", "bluesky"]
 ShowCodeCopyButtons = true
