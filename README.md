@@ -1,2 +1,3 @@
-# blog.juzam.pro
+# Blog
+
 Repository for my personal blog
