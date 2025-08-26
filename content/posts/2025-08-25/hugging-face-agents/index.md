@@ -8,19 +8,19 @@ image = "cover.jpg"
 caption = "Agent by [Nick Youngson](http://www.nyphotographic.com/) CC BY-SA 3.0 Pix4free"
 +++
 
-I've been working through the hugging face
-[agents course](https://huggingface.co/learn/agents-course/) and I am enjoying
-quite a bit. Highly recommended. First of all it round it off my knowledge about
-LLMs, transformers, and AI in general. Second it painted a very clear picture of
-what agentic AI is all about while staying away from the hype. I'll try to
-summarize here but I really recommended that you check the course instead.
+I've been working through the Hugging Face
+[agents course](https://huggingface.co/learn/agents-course/), and I’m enjoying
+it quite a bit. Highly recommended! First, it’s rounding out my knowledge of
+LLMs, transformers, and AI in general. Second, it paints a very clear picture of
+what agentic AI is all about—while staying away from the hype. I’ll try to
+summarize here, but I really recommend checking out the full course.
 
 Don't quote me on that but I think the defining feature of agents is the ability
 to use tools to interact with the environment. Instead of relying solely on the
 knowledge of the model itself, agents can search the web, use Unix commands like
 find, ls, and grep. Another key characteristic is that this all happens in a
-loop, giving the agent to course correct in case things don't go as planned in
-order to achieve its goal.
+loop, giving the agent the ability to course correct in case things don't go as
+planned in order to achieve its goal.
 
 The Re-Act loop looks something like this:
 
@@ -44,15 +44,15 @@ can go wrong here. But conceptually that's what the agent does.
 
 ## First agent using smolagents
 
-If that seems to abstract, let me walk you through a real example using a simple
-agent that uses a couple of tools to calculate the distance between two cities.
-Let dive into the code. This example is based on
-[smolagents](http://smolagents.org) framework from Hugging Face. It focuses on
-the `CodeAgent` class which is a special kind of agent that uses python code to
-answer its requests.
+If that seems too abstract, let me walk you through a real example using a
+simple agent that uses a couple of tools to calculate the distance between two
+cities. Allow me to dive into the code.
 
-I'll be using `uv` to manage the dependencies for this tutorial, so if you don't
-have it already go ahead and install it following the
+This example is based on the [smolagents](http://smolagents.org) framework from
+Hugging Face. It focuses on the `CodeAgent` class, which is a special kind of
+agent that uses Python code to answer its requests. I'll be using `uv` to manage
+the dependencies for this tutorial, so if you don't have it already, go ahead
+and install it following the
 [installation steps](https://docs.astral.sh/uv/getting-started/installation/)
 first.
 
@@ -117,19 +117,19 @@ res = agent.run("""
 """)
 ```
 
-Let me breakdown the code:
+Let me break down the code:
 
-- Imports: bringing the smolagents classes and functions that are used to
+- Imports: bring in the smolagents classes and functions that are used to
   implement the agent.
-- Tool definition: define a tool that calculates the distance between two
-  coordinates using the Haversine function.
-- Model API: I'm using Ollama to run this test on a RTX 4060 ti with 16 GB of
+- Tool definition: defines a tool that calculates the distance between two
+  coordinates using the Haversine formula.
+- Model API: I'm using Ollama to run this test on an RTX 4060 Ti with 16 GB of
   VRAM on a Debian 13 system. The `qwen3-coder:30b` model was the best
-  performing option that would run on my hardware, but your millage my vary. You
-  can also use the `InferenceClient` and the Hugging Face API to run these
-  tests, I had to find an alternative solution because I ran out of credits.
-- Instantiate the agent: here the agent is created with all tools necessary and
-  also a reference for the model.
+  performing option that would run on my hardware, but your mileage may vary.
+  You can also use the `InferenceClient` and the Hugging Face API to run these
+  tests. I had to find an alternative solution because I ran out of credits.
+- Instantiate the agent: here the agent is created with all the necessary tools
+  and also a reference to the model.
 - Run the prompt and monitor the logs
 
 Execute the file by running:
@@ -215,10 +215,10 @@ existing tool!
 Armed with the coordinates from steps 1 and 2, the agent now tries to use the
 provided `distance` tool to perform the calculation. Pay close attention to the
 highlighted lines though. The agent made a mistake when naming the variable and
-the python parser complained about it. This gets corrected on the next step.
-That speaks to the ability of the Re-Act loop to self correct and find the right
-answer. As long as you provide the correct feedback mechanisms. In this case the
-python interpreter provided an error message.
+the Python parser complained about it. This gets corrected on the next step.
+That speaks to the ability of the Re-Act loop to self-correct and find the right
+answer, as long as you provide the correct feedback mechanisms. In this case the
+Python interpreter provided an error message.
 
 ```text
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ Step 4 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -248,18 +248,19 @@ Final answer: 555.61
 
 ## Conclusion
 
-I was very skeptical of the current AI hype cycle, so I was mostly following
-from a safe distance for lack of better word. But since I started experimenting
-with Claude Code and similar tools something clicked. The multi-step approach
-combined with tool usage and verifications is really interesting. As a software
-engineer, this also resonates a lot with me because now I can shape and give the
-tools to the LLM so it can complete the tasks and verify its outputs.
+I was very skeptical of the current AI hype cycle, so I was mostly following it
+from a safe distance for lack of a better word. But since I started
+experimenting with Claude Code and similar tools, something clicked. The
+multi-step approach combined with tool usage and verifications is really
+interesting. As a software engineer, this also resonates a lot with me because
+now I can shape and give tools to the LLM so it can complete tasks and verify
+its outputs.
 
-I haven't completed the course and I am curious about other tools like
+I haven't completed the course yet and I am curious about other tools like
 LlamaIndex and how RAG plays a role in the agent's workflow. The course also
-clearly favor code agents rather than tool calling (JSON based) but it does very
-little to compare both. I can only imagine the kinds of attacks a code
-generating agent would be susceptible to, so I'm not convinced that it is a
-clear winner. Also the fact that most other players like Anthropic prefer tool
-calling agents gives me pause. I might do a follow-up article as I advance on
-the course but that is it for now.
+clearly favors code agents rather than tool calling (JSON-based) but it does
+very little to compare both approaches. I can only imagine the kinds of attacks
+a code- generating agent would be susceptible to, so I'm not convinced that it
+is a clear winner. Also, the fact that most other players like Anthropic prefer
+tool- calling agents gives me pause. I might do a follow-up article as I advance
+through the course, but that is it for now.
