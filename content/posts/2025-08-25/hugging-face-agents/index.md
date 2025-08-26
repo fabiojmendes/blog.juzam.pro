@@ -8,25 +8,53 @@ image = "cover.jpg"
 caption = "Agent by [Nick Youngson](http://www.nyphotographic.com/) CC BY-SA 3.0 Pix4free"
 +++
 
-I've been doing the hugging face agents course
+I've been working through the hugging face
+[agents course](https://huggingface.co/learn/agents-course/) and I am enjoying
+quite a bit. Highly recommended. First of all it round it off my knowledge about
+LLMs, transformers, and AI in general. Second it painted a very clear picture of
+what agentic AI is all about while staying away from the hype. I'll try to
+summarize here but I really recommended that you check the course instead.
 
-## First agent using smolagents
+Don't quote me on that but I think the defining feature of agents is the ability
+to use tools to interact with the environment. Instead of relying solely on the
+knowledge of the model itself, agents can search the web, use Unix commands like
+find, ls, and grep. Another key characteristic is that this all happens in a
+loop, giving the agent to course correct in case things don't go as planned in
+order to achieve its goal.
 
-I'll be using `uv` to manage the dependencies for this tutorial, so if you don't
-have it already go ahead and install it following the
-[installation steps](https://docs.astral.sh/uv/getting-started/installation/)
-first.
+The Re-Act loop looks something like this:
 
 ```mermaid
 stateDiagram-v2 
   direction LR
-    [*] --> Query
-    Query --> Think
+    [*] --> Prompt
+    Prompt --> Think
     Think --> Act
     Act --> Observe
     Observe --> Think
     Observe --> [*]
 ```
+
+It all starts with a prompt that gives the agent a task to complete. The agent
+"thinks" using an LLM model to decide which tools should be used to complete the
+task. It acts by executing those tools and collecting the observations. It then
+decides if the task is complete, otherwise it goes back for another iteration
+until it solves the problem. Of course this is the happy path and many things
+can go wrong here. But conceptually that's what the agent does.
+
+## First agent using smolagents
+
+If that seems to abstract, let me walk you through a real example using a simple
+agent that uses a couple of tools to calculate the distance between two cities.
+Let dive into the code. This example is based on
+[smolagents](http://smolagents.org) framework from Hugging Face. It focuses on
+the `CodeAgent` class which is a special kind of agent that uses python code to
+answer its requests.
+
+I'll be using `uv` to manage the dependencies for this tutorial, so if you don't
+have it already go ahead and install it following the
+[installation steps](https://docs.astral.sh/uv/getting-started/installation/)
+first.
 
 Create a new project and add the required dependencies:
 
@@ -91,11 +119,18 @@ res = agent.run("""
 
 Let me breakdown the code:
 
-- imports
-- tool definition
-- Model API
-- Instantiate agent
-- run with the prompt
+- Imports: bringing the smolagents classes and functions that are used to
+  implement the agent.
+- Tool definition: define a tool that calculates the distance between two
+  coordinates using the Haversine function.
+- Model API: I'm using Ollama to run this test on a RTX 4060 ti with 16 GB of
+  VRAM on a Debian 13 system. The `qwen3-coder:30b` model was the best
+  performing option that would run on my hardware, but your millage my vary. You
+  can also use the `InferenceClient` and the Hugging Face API to run these
+  tests, I had to find an alternative solution because I ran out of credits.
+- Instantiate the agent: here the agent is created with all tools necessary and
+  also a reference for the model.
+- Run the prompt and monitor the logs
 
 Execute the file by running:
 
@@ -115,6 +150,9 @@ Example output:
 │                                                                                │
 ╰─ OpenAIServerModel - qwen3-coder:30b ──────────────────────────────────────────╯
 ```
+
+The agent loads the model and executes the prompt. It tries to break the task in
+a series of steps that it can more easily reason about.
 
 ```text
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ Step 1 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -157,7 +195,8 @@ Out: None
 ```
 
 On steps 1 and 2, the agent uses the `web_search` tool to crawl the web and look
-for the geographic coordinates for the two cities of interest.
+for the geographic coordinates for the two cities of interest. That information
+gets added to the agent memory and is used in the following steps.
 
 ```text {hl_lines=[5,8,9,10]}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ Step 3 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -173,12 +212,13 @@ existing tool!
 [Step 3: Duration 7.77 seconds| Input tokens: 9,382 | Output tokens: 231]
 ```
 
-Armed with the coordinates, the agent now tries to use the provided `distance`
-tool to perform the calculation. Pay close attention to the highlighted lines
-though. The agent made a mistake when naming the variable that and the python
-parser complained about it. This gets corrected on the next step. That speaks to
-the ability of the agent loop to self correct and find the right answer. As long
-as you provide the correct feedback mechanisms.
+Armed with the coordinates from steps 1 and 2, the agent now tries to use the
+provided `distance` tool to perform the calculation. Pay close attention to the
+highlighted lines though. The agent made a mistake when naming the variable and
+the python parser complained about it. This gets corrected on the next step.
+That speaks to the ability of the Re-Act loop to self correct and find the right
+answer. As long as you provide the correct feedback mechanisms. In this case the
+python interpreter provided an error message.
 
 ```text
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ Step 4 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -208,7 +248,18 @@ Final answer: 555.61
 
 ## Conclusion
 
-- External tools
-- Multi step approach
-- Agent self correction
-- Code agents vs tool agents
+I was very skeptical of the current AI hype cycle, so I was mostly following
+from a safe distance for lack of better word. But since I started experimenting
+with Claude Code and similar tools something clicked. The multi-step approach
+combined with tool usage and verifications is really interesting. As a software
+engineer, this also resonates a lot with me because now I can shape and give the
+tools to the LLM so it can complete the tasks and verify its outputs.
+
+I haven't completed the course and I am curious about other tools like
+LlamaIndex and how RAG plays a role in the agent's workflow. The course also
+clearly favor code agents rather than tool calling (JSON based) but it does very
+little to compare both. I can only imagine the kinds of attacks a code
+generating agent would be susceptible to, so I'm not convinced that it is a
+clear winner. Also the fact that most other players like Anthropic prefer tool
+calling agents gives me pause. I might do a follow-up article as I advance on
+the course but that is it for now.
