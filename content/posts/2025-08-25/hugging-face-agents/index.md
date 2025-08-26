@@ -1,6 +1,5 @@
 +++
 date = '2025-08-25T10:40:48-04:00'
-draft = true
 title = 'Hugging face agents'
 tags = ["llm", "agents", "ai", "hugging face", "smolagents"]
 [cover]
