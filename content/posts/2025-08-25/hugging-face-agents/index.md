@@ -14,14 +14,15 @@ LLMs, transformers, and AI in general. Second, it paints a very clear picture of
 what agentic AI is all about—while staying away from the hype. I’ll try to
 summarize here, but I really recommend checking out the full course.
 
-Don't quote me on that but I think the defining feature of agents is the ability
-to use tools to interact with the environment. Instead of relying solely on the
-knowledge of the model itself, agents can search the web, use Unix commands like
-find, ls, and grep. Another key characteristic is that this all happens in a
-loop, giving the agent the ability to course correct in case things don't go as
-planned in order to achieve its goal.
+This is not a formal definition, but I think the defining feature of agents is
+the ability to use tools to interact with the environment. Instead of relying
+solely on the knowledge of the model itself, agents can search the web, access
+web pages, and use Unix commands like find, ls, and grep to help answer your
+questions. Another key characteristic is that this all happens in a loop, giving
+the agent the ability to course correct in case things don't go as planned in
+order to achieve its goal.
 
-The Re-Act loop looks something like this:
+This is known as the Re-Act loop, and it looks something like this:
 
 ```mermaid
 stateDiagram-v2 
