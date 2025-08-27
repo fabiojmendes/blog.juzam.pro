@@ -14,7 +14,7 @@ LLMs, transformers, and AI in general. Second, it paints a very clear picture of
 what agentic AI is all about—while staying away from the hype. I’ll try to
 summarize here, but I really recommend checking out the full course.
 
-This is not a formal definition, but I think the defining feature of agents is
+This is not a formal definition, but I think the crucial feature of agents is
 the ability to use tools to interact with the environment. Instead of relying
 solely on the knowledge of the model itself, agents can search the web, access
 web pages, and use Unix commands like find, ls, and grep to help answer your
