@@ -1,7 +1,9 @@
 +++
-date = '2025-08-26T22:28:32-04:00'
+title = "Notes"
 draft = true
-title = 'Notes'
+author = [""]
+[editPost]
+disabled = true
 +++
 
 Notes and ideas for new posts

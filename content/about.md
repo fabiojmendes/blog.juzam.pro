@@ -1,4 +1,9 @@
-# About
++++
+title = "About"
+author = [""]
+[editPost]
+disabled = true
++++
 
 Hi, my name is Fabio. I'm passionate about all things related to hardware,
 software, programming languages, and distributed systems. As a home lab
