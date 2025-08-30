@@ -4,10 +4,10 @@ draft = true
 date = '2025-08-29T17:24:28-04:00'
 tags = []
 [cover]
-image = "cover.png"
+image = "cover.svg"
 +++
 
-I've been through a few iterations on which tool to use to manage the vms on my
+I've been through a few iterations on which tool to use to manage the VMs on my
 homelab. VirtualBox, Vagrant, Proxmox, you name it. Even a gobbled together
 solution with Libvirt, qcow2 images and a
 [Makefile](https://github.com/fabiojmendes/shell-goodies/blob/master/libvirt/config/Makefile).
