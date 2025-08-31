@@ -1,66 +1,64 @@
 +++
-title = 'LXD: Rocky Linux image gets stuck during boot'
-draft = true
+title = 'LXD: Rocky Linux VM gets stuck during boot'
 date = '2025-08-29T17:24:28-04:00'
 tags = []
 [cover]
 image = "cover.svg"
 +++
 
-I've been through a few iterations on which tool to use to manage the VMs on my
-homelab. VirtualBox, Vagrant, Proxmox, you name it. Even a cobbled together
-solution with Libvirt, qcow2 images and a
+I've gone through a few iterations of tools to manage the VMs in my homelab:
+VirtualBox, Vagrant, Proxmox—you name it. Even a cobbled‑together solution with
+Libvirt, qcow2 images, and a
 [Makefile](https://github.com/fabiojmendes/shell-goodies/blob/master/libvirt/config/Makefile).
 
-Over the years, I honed in on some requirements that made sense for my use
+Over the years, I've homed in on a few requirements that make sense for my use
 cases:
 
-- Integrate well with my workflow, i.e. has to have a good CLI
-- Support name resolution
-- Easy to download images
+- Integrates well with my workflow (i.e., has a good CLI)
+- Supports name resolution
+- Makes downloading images easy
 - Good support for cloud-config
-- Support for OpenZFS
+- Supports OpenZFS
 
 With my previous attempts, something was always missing or wasn't fully
-supported. LXD turned out to check all these boxes for me. I'm not a huge fan of
-the snap installation, and after
+supported. LXD checks all these boxes for me. I'm not a huge fan of the Snap
+installation, and after
 [Canonical’s takeover](https://linuxcontainers.org/lxd/), I'll migrate to
 [Incus](https://linuxcontainers.org/incus/) when time allows. But I am pretty
 happy with the tool itself.
 
-I use LXD mostly to manage virtual machines. Personally, I don't have much use
-for OS-level containers. That's because most of the services that I run on my
-homelab are application containers running with Podman. I spin up a VM whenever
-I want to experiment with something new and want the full isolation it provides.
-So I play around with different distros like Ubuntu, Debian, Fedora, Rocky,
-Alma, CentOS, and so on.
+I use LXD mostly to manage virtual machines. I don't have much use for OS‑level
+containers because most of the services that I run on my homelab are application
+containers running with Podman. I spin up a VM whenever I want to experiment
+with something new and need the full isolation it provides. So I play around
+with different distros like Ubuntu, Debian, Fedora, Rocky, Alma, and CentOS.
 
 ## VMs hanging during boot
 
-But what's the fun in technology without an itch to scratch? I noticed an
-interesting issue where a few of those distros would sometimes get stuck during
-the boot-up process. I would see a message like this on the `lxc console`:
+But what's the fun in technology without an itch to scratch? I noticed an issue
+where some of those distros would sometimes get stuck during boot. I would see a
+message like this in the `lxc console`:
 
 ```text
 [  *** ] A start job is running for /dev/loop4p2 (1w 15h 22min 46s / no limit)
 ```
 
-In particular, this would only happen with Red Hat-based distros like Fedora or
-Rocky Linux. As you can see, this VM has been stuck for more than a week on this
-process. Yes, I hear you—I should have better monitoring for my homelab. But
-like I said, these are usually ephemeral boxes that I use for testing.
+In particular, this happens with Red Hat–based distros like Fedora and Rocky
+Linux. As you can see, this VM has been stuck on this job for more than a week.
+Yes, I hear you—I should have better monitoring for my homelab. But like I said,
+these are usually ephemeral boxes that I use for testing.
 
-After digging around a little, I found that some people were having a similar
+After digging around a bit, I found that some people were having a similar
 [issue](https://discuss.linuxcontainers.org/t/couldnt-boot-up-rocky-linux-9-vm/17185)
-with brand new VMs, and it had to do with how the images were created. That
-wasn't my case—these VMs were working fine for a while, and then all of a sudden
-this would happen.
+with brand‑new VMs, and it had to do with how the images were created. That
+wasn't my case—these VMs were working fine for a while, and then, all of a
+sudden, this would happen.
 
-But looking more carefully at that forum post, the very
+Looking more closely at that forum post, the
 [last message](https://discuss.linuxcontainers.org/t/couldnt-boot-up-rocky-linux-9-vm/17185/24)
-states that after a "yum update," the user would experience the same behavior.
-Experimenting with a few installations, I was able to zero in on the root cause.
-When there's a kernel update, the generated
+states that after running `yum update`, the user would experience the same
+behavior. Experimenting with a few installations, I was able to zero in on the
+root cause. When there's a kernel update, the generated
 `/boot/loader/entries/<uuid>-<version>-<arch>.conf` looks a little like this:
 
 ```text {hl_lines=[5]}
@@ -74,6 +72,8 @@ grub_arg --unrestricted
 grub_class rocky
 ```
 
+Comparing it to the previous version, the error is clear:
+
 ```text {hl_lines=[5]}
 title Rocky Linux (5.14.0-570.25.1.el9_6.x86_64) 9.6 (Blue Onyx)
 version 5.14.0-570.25.1.el9_6.x86_64
@@ -85,22 +85,28 @@ grub_arg --unrestricted
 grub_class rocky
 ```
 
-The fix is quite simple: you need to replace the `root=/dev/loopXpY` property in
-the `options` section with the correct UUID for your root device. In my case,
+The fix is quite simple: you need to replace the `root=/dev/loopXpY` parameter
+in the `options` section with the correct UUID for your root device. In my case,
 this would be:
 
 ```text
 options root=UUID=3f7470e9-ff2f-448f-8bd7-97f573f9b597 ro console=tty1 console=ttyS0
 ```
 
-You can use an existing working entry, usually the previous kernel before the
-update, as a reference to update the value.
+You can use a working entry—usually the previous kernel's—as a reference to
+update the value.
 
 ## Mounting a ZVOL on the host system
 
-Now the tricky part is: how do you update the value if the OS won't boot? If you
-are using LXD with an OpenZFS storage pool, you have to mount the ZVOL to make
-those changes. To that end, you have to follow a few steps:
+Here's the tricky part: how do you update the value if the OS won't boot? If you
+are using LXD with an OpenZFS storage pool, you need to mount the ZVOL on the
+host to make those changes. Follow these steps:
+
+Make sure to stop the machine before executing these steps:
+
+```shell
+lxc stop rocky
+```
 
 Set the `volmode` to `full` so it can be read and mounted by the host system:
 
@@ -108,19 +114,19 @@ Set the `volmode` to `full` so it can be read and mounted by the host system:
 zfs set volmode=full tank/lxd/virtual-machines/rocky.block
 ```
 
-Mount the new device to a working folder:
+Mount the device at a temporary mount point:
 
 ```shell
 mount /dev/zvol/tank/lxd/virtual-machines/rocky.block-part2 /mnt
 ```
 
-Edit the entry file and update the root property:
+Edit the entry file and update the root parameter:
 
 ```shell
 vi /mnt/boot/loader/entries/a53795788afc466894e149f71508881b-5.14.0-570.26.1.el9_6.x86_64.conf
 ```
 
-Unmount the filesystem and clean up all changes:
+Unmount the filesystem and clean up:
 
 ```shell
 umount /mnt
@@ -133,7 +139,7 @@ That's it—you should be able to boot the VM as usual now:
 lxc start rocky
 ```
 
-This is a quick workaround to get you up and running again. Ideally, the script
-that generates the entry file would do the right thing, but I'm not sure where
-this is configured. I'll update this post in the future if I find a definitive
-solution.
+This is a quick workaround to get you up and running again. Ideally, whatever
+generates the entry file would set the correct root parameter, but I'm not sure
+where this is configured. I'll update this post in the future if I find a
+definitive solution.
