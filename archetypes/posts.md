@@ -1,7 +1,8 @@
 +++
 title = '{{ replace .File.ContentBaseName "-" " " | title }}'
 draft = true
-author = [""]
-[editPost]
-disabled = true
+date = '{{ .Date }}'
+tags = []
+[cover]
+image = "cover.png"
 +++
