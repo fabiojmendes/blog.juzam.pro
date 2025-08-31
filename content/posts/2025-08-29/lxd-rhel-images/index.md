@@ -1,7 +1,7 @@
 +++
 title = 'LXD: Rocky Linux VM gets stuck during boot'
 date = '2025-08-29T17:24:28-04:00'
-tags = []
+tags = ["LXD", "RockyLinux", "Fedora", "OpenZFS"]
 summary = """
 RHEL-based LXD VMs (Rocky, Fedora) can hang at boot after kernel updates.
 This post explains the root cause and shows how to fix the boot entry, and get the VM booting again.
