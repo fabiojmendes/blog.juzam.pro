@@ -2,6 +2,12 @@
 title = 'LXD: Rocky Linux VM gets stuck during boot'
 date = '2025-08-29T17:24:28-04:00'
 tags = []
+description = """
+RHEL-based LXD VMs (Rocky, Fedora) can hang at boot with “A start job is running for /dev/loop…”
+after kernel updates. The culprit is a systemd-boot entry that sets root=/dev/loopXpY
+instead of the root filesystem UUID. This post explains the root cause and shows
+how to mount an OpenZFS-backed ZVOL on the host, fix the boot entry, and get the VM booting again.
+"""
 [cover]
 image = "cover.svg"
 +++
