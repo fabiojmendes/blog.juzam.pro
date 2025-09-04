@@ -17,92 +17,139 @@ least, prank my friends.
 Last year I tried a few different approaches to fine tune a model using the chat
 data, but I didn't work all that well. Fine tuning a model on commodity hardware
 is a challenge in itself and the results were underwhelming. So I dropped that
-idea.
-
-While going through the material for the
+idea for a while. While going through the material for the
 [HuggingFace Agents Course](https://huggingface.co/learn/agents-course/unit2/llama-index/components)
 though, it became very clear that RAG (Retrieval Augmented Generation) would be
 a perfect fit for what I was trying to do.
 
-This post shows how to export chats, parse the .txt files, index them with
-LlamaIndex, and ask questions locally. You’ll end with a small chat application
-that you can talk and ask questions about your WhatsApp log.
-
-## Outline
-
-1. Problem & goals
-
-- Build a local, private semantic search + Q&A over WhatsApp exports.
-- No cloud required if you choose local models.
-
-2. Prerequisites
-
-- Python 3.10+; WhatsApp .txt exports; optional Ollama or OpenAI key.
-
-3. Exporting chats
-
-- WhatsApp → Export Chat → Without Media → Save .txt (repeat for multiple
-  chats).
-
-4. Parsing the export(s)
-
-- Handle Android/iOS timestamp formats and multi‑line messages.
-
-5. Building the index with LlamaIndex
-
-- Chunking, embeddings, LLM choice (local vs cloud), persistence.
-
-6. Querying
-
-- CLI example and optional Streamlit app.
-
-7. Privacy & tips
-
-- Keep it local, structure metadata, handle large histories.
-
-8. Next steps
-
-- Sender/date filters, summaries, scheduled refresh.
+This post shows how easy it is to set up a RAG on top of your WhatsApp chat
+logs. You are going to export your messages, parse the .txt files, index them
+with LlamaIndex, generate embeddings and store them to DuckDB, and ask questions
+locally running Ollama. You’ll end with a small chat application that you can
+talk and ask questions about your conversation log. The best part is that
+everything can run from your local machine, so you don't have to upload any of
+this sensitive data to cloud providers.
 
 ## Prerequisites
 
 - Python 3.10+
 - One or more WhatsApp chat exports in `.txt` format
-- Optional: `ollama` running a local model (e.g., `llama3`), or an OpenAI API
-  key
+- [`ollama`](https://ollama.com/download) running a local model (e.g., `llama3`
+  or `gpt-oss`)
+- [`uv`](https://docs.astral.sh/uv/getting-started/installation/) to manage
+  Python dependencies
 
-Install with uv (fast Python package manager):
+Create a new project using `uv` and add the dependencies:
 
 ```shell
-# Create a virtualenv (optional if you prefer `uv run`)
-uv venv
-source .venv/bin/activate  # Windows: .\.venv\Scripts\activate
-
-# Core deps
-uv pip install "llama-index>=0.10" python-dateutil \
-  llama-index-embeddings-huggingface \
+uv init whatsapp-rag
+cd whatsapp-rag
+uv add \
   llama-index-llms-ollama \
-  streamlit
+  llama-index-vector-stores-duckdb \
+  llama-index-embeddings-huggingface \
+  gradio
 ```
 
-Folder layout I’ll use in examples:
+## Export your chats
 
-```
-project/
-  data/whatsapp_exports/   # put *.txt exports here
-  storage/                 # LlamaIndex persistence
-  rag_whatsapp.py          # CLI runner
-  app.py                   # optional Streamlit UI
+Create a new directory for the chat data inside your project:
+
+```shell
+mkdir input
 ```
 
-## 1) Export your chats
+You need to export your chat messages to a text file.
 
 - iOS: Chat → Contact info → Export Chat → Without Media → Save/Share .txt
 - Android: Chat → More → Export chat → Without media
-- Name each file clearly: `family.txt`, `work.txt`, etc., and place them in
-  `data/whatsapp_exports/`.
+- Name each file clearly: `family.txt`, `work.txt`, etc., and place them in the
+  `./input` folder.
 
-## 2) Parse WhatsApp .txt
+## Ingest chat logs
+
+Create a new file named `ingest.py` and populate with this content:
+
+```python
+from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
+from llama_index.core.node_parser import TokenTextSplitter
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.vector_stores.duckdb import DuckDBVectorStore
+
+
+vector_store = DuckDBVectorStore("duck.db", persist_dir="./data/")
+storage_context = StorageContext.from_defaults(vector_store=vector_store)
+embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-m3")
+
+splitter = TokenTextSplitter(chunk_size=512, separator="\r\n")
+
+documents = SimpleDirectoryReader("./input/").load_data()
+
+index = VectorStoreIndex.from_documents(
+    documents,
+    storage_context=storage_context,
+    transformations=[splitter],
+    embed_model=embed_model,
+    show_progress=True,
+)
+```
+
+```shell
+uv run ingest.py
+```
+
+## Main chat app
+
+```python
+import gradio
+from llama_index.core import VectorStoreIndex
+from llama_index.core.prompts import ChatMessage
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.llms.ollama import Ollama
+from llama_index.vector_stores.duckdb import DuckDBVectorStore
+
+embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-m3", device="cpu")
+vector_store = DuckDBVectorStore.from_local("./data/duck.db")
+index = VectorStoreIndex.from_vector_store(vector_store, embed_model=embed_model)
+
+
+llm = Ollama(
+    model="gpt-oss:20b",
+    request_timeout=300,
+    context_window=1024 * 10,
+)
+
+engine = index.as_chat_engine(
+    llm=llm,
+    similarity_top_k=5,
+    system_prompt=(
+        "You are a helpful assistant that searches WhatsApp "
+        "messages to answer questions"
+    ),
+    streaming=True,
+)
+
+
+def stream(input: str, history: list[dict[str, str]]):
+    chat_history = [
+        ChatMessage(role=item["role"], content=item["content"]) for item in history
+    ]
+    content = ""
+    for token in engine.stream_chat(input, chat_history=chat_history).response_gen:
+        content += token
+        yield content
+
+
+chat = gradio.ChatInterface(
+    fn=stream,
+    type="messages",
+    title="RacinhoGPT",
+).launch()
+```
+
+```shell
+uv run main.py
+```
 
 WhatsApp exports vary by locale (date order, 12/24h time) and platform. We’ll
 use a tolerant regex and the `dateutil` parser, and we’ll stitch multi‑line
