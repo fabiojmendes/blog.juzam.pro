@@ -242,9 +242,9 @@ grounded on those snippets.
 Here are some ideas on how to improve on this example:
 
 - Play around with different LLM and embedding models.
-- Tune the system prompt, chunk size, `top_k` value, and the context window
-  according to your hardware and compare what combination deliver the most
-  reliable results.
+- Tune the `system_prompt`, `chunk_size`, `top_k`, and the `context_window`
+  values according to your hardware, and compare which combination deliver the
+  most reliable results.
 - Turn the application into an agent. So far, the application only one-shots the
   model with the appropriate context. You can improve its results by using an
   agentic loop to retrieve the information. This can be achieved by transforming
@@ -258,4 +258,4 @@ a private, semantic interface to your WhatsApp history. This example is also not
 limited to WhatsApp chats, you can easily adapt to other file formats using
 LlamaIndex provided
 [parsers](https://docs.llamaindex.ai/en/stable/module_guides/loading/node_parsers/modules/).
-I high recommend checking it out.
+I highly recommend checking it out.
