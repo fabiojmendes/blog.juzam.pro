@@ -30,6 +30,41 @@ talk and ask questions about your conversation log. The best part is that
 everything can run from your local machine, so you don't have to upload any of
 this sensitive data to cloud providers.
 
+## Rag, embeddings, and vector databases
+
+Before diving in the implementation, here are some definitions of key concepts
+used in this experiment:
+
+- RAG: Retrieval‑Augmented Generation; first retrieves relevant chunks from your
+  data, then generates an answer grounded in those snippets.
+- Embeddings: Numeric vector representations of text; semantically similar texts
+  map to nearby vectors, enabling semantic similarity search.
+- Vector database: A store/index optimized for embeddings and fast similarity
+  search (e.g., retrieving the top‑k most relevant chunks). Here LlamaIndex’s
+  DuckDB vector store is used to persist vectors locally.
+
+This is what the workflow looks like once fully implemented:
+
+```mermaid
+flowchart 
+  %% Ingestion
+  subgraph Ingestion
+    A[WhatsApp exports] --> B[Parse/Cleanup]
+    B --> C[Chunking]
+    C --> D[Generate embeddings]
+    D --> E[(DuckDB Vector Store)]
+  end
+
+  %% Query
+  subgraph Query
+    Q[User question] --> Qe[Embed query]
+    Qe --> E
+    E --> K[Top-k similar chunks]
+    K --> L[LLM generation]
+    L --> A2[Grounded answer]
+  end
+```
+
 ## Prerequisites
 
 - Python 3.10+
@@ -174,11 +209,17 @@ chat = gradio.ChatInterface(
 
 This file wires the stored index to an LLM and a simple chat UI:
 
+- Embed model: here the embedding model is loaded on the CPU to save VRAM for
+  the LLM model. Also, only the user's prompt needs to be processed so using the
+  GPU won't give you a lot of performance improvements.
 - Load index: `DuckDBVectorStore.from_local("./data/duck.db")` reopens the
   previously persisted vectors, and `VectorStoreIndex.from_vector_store(...)`
   prepares a retriever over them using the same embedding model.
 - Local LLM: `Ollama(model="gpt-oss:20b")` runs a local model for generation.
   You can replace it with another Ollama model (e.g., `llama3`) if preferred.
+  Make sure to configure an appropriate context window that fits in your
+  hardware budget. I'm using a GeForce RTX 4060Ti 16 GB, so 10k was the right
+  number to fit the model, system prompt, the RAG context, and the user prompt.
 - Chat engine: `index.as_chat_engine(...)` handles retrieval‑augmented
   generation with `top_k=5` similar chunks and a concise system prompt.
 - Streaming: `engine.stream_chat(...)` yields tokens as they are generated; the
@@ -188,80 +229,33 @@ This file wires the stored index to an LLM and a simple chat UI:
 - UI: `gradio.ChatInterface` provides a minimal chat app you can open in the
   browser. Title is arbitrary—rename freely.
 
-Once launched, type a question like “When did we discuss the ski trip?” and the
-assistant retrieves relevant messages from your chats and answer grounded on
-those snippets.
-
 ```shell
 uv run main.py
 ```
 
-## Cleanup
+Once launched, type a question like “Is there any discussions of a ski trip?”
+and the assistant retrieves relevant messages from your chats and answer
+grounded on those snippets.
 
-WhatsApp exports vary by locale (date order, 12/24h time) and platform. We’ll
-use a tolerant regex and the `dateutil` parser, and we’ll stitch multi‑line
-messages back together.
+## Where to go from here
 
-Create a parser that yields LlamaIndex `Document`s—one per chat—containing
-formatted message lines and useful metadata per document.
+Here are some ideas on how to improve on this example:
 
-Notes:
-
-- This groups each chat export into a single `Document`, then uses the chunker
-  to create semantic nodes for retrieval.
-- Metadata includes `chat`, `start`, `end`, and `messages` for context and
-  future filters.
-- For purely local processing, keep the default HuggingFace embedding and do not
-  set a cloud LLM. You can still retrieve relevant passages; answering will be a
-  simple synthesis from the retrieved chunks. For generative answers locally,
-  enable Ollama.
-
-If you prefer OpenAI for LLM/embeddings, configure instead:
-
-## 3) First queries (CLI)
-
-Build the index and ask:
-
-If you didn’t enable an LLM (Ollama/OpenAI), the answer may be terse; you’ll
-still see relevant source snippets. Enable a model to get fluent answers.
-
-## Privacy, accuracy, and scale
-
-- Local by default: Using HuggingFace embeddings keeps your data on disk. Add a
-  local LLM via Ollama to keep generation local too. If you switch to cloud
-  models, understand what data leaves your machine.
-- Parsing differences: WhatsApp export formats vary. If your locale isn’t parsed
-  correctly, tweak the regex or pass a fixed `dayfirst` setting.
-- Chunking: Adjust `chunk_size`/`chunk_overlap` for your dataset length and
-  retrieval quality. Larger chunks can help preserve context of multi‑message
-  exchanges; smaller chunks improve pinpoint retrieval.
-- Persistence: Reusing the `storage/` directory avoids re‑indexing on every run.
-  Delete it to rebuild after adding new exports.
-- Big histories: If you have many chats, consider splitting `Document`s by month
-  (or week) to speed retrieval and enable date filters in metadata.
-
-## Nice extensions
-
-- Sender/date filters: Add `MetadataFilters` to restrict by chat name or time
-  window.
-- Summaries per chat: Build monthly summaries with `SummaryIndex` and link to
-  raw sources.
-- Notifications: A cron job to re‑index new exports dropped into the folder.
-- Multi‑query or query fusion: Improve recall using `QueryFusionRetriever`.
-
-## Troubleshooting
-
-- No results returned: Check that `.txt` files actually have lines matching the
-  regex (look for `" - Name: "` after a timestamp). Some exports include system
-  lines; those are skipped.
-- Wrong dates: Switch the order in the parser (set `dayfirst=True` or `False`
-  consistently).
-- Slow answers: Increase `top_k` a bit but keep it reasonable (6–10). For large
-  corpora, consider a stronger embedding model.
+- Play around with different LLM and embedding models.
+- Tune the system prompt, chunk size, `top_k` value, and the context window
+  according to your hardware and compare what combination deliver the most
+  reliable results.
+- Turn the application into an agent. So far, the application only one-shots the
+  model with the appropriate context. You can improve its results by using an
+  agentic loop to retrieve the information. This can be achieved by transforming
+  the query engine into a tool using the `QueryEngineTool` and `AgentWorkflow`
+  classes both from LlamaIndex.
 
 ## Wrap‑up
 
 With a few dozen lines of parsing and LlamaIndex’s indexing/query APIs, you get
-a private, semantic interface to your WhatsApp history. Drop new exports into
-the folder and re‑run to stay up to date. In a follow‑up, we can add sender/date
-filters and monthly summaries for more focused recall.
+a private, semantic interface to your WhatsApp history. This example is also not
+limited to WhatsApp chats, you can easily adapt to other file formats using
+LlamaIndex provided
+[parsers](https://docs.llamaindex.ai/en/stable/module_guides/loading/node_parsers/modules/).
+I high recommend checking it out.
