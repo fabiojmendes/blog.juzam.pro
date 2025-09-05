@@ -1,8 +1,7 @@
 +++
 title = "Ask your WhatsApp: build a private RAG with LlamaIndex"
-draft = true
-date = '2025-09-02T20:46:38-04:00'
-tags = ["llamaindex", "rag", "whatsapp", "privacy", "ai", "duckdb"]
+date = '2025-09-05T13:09:00-04:00'
+tags = ["LlamaIndex", "RAG", "whatsapp", "privacy", "AI", "DuckDB", "LLM"]
 [cover]
 image = "zaprag.svg"
 +++
@@ -11,28 +10,28 @@ image = "zaprag.svg"
 
 I have a very active group chat with my friends on WhatsApp. At the time of
 writing, it is a bit over half a million messages. Since LLMs became a thing, I
-always wondered how I could use this data to something useful—or at the very
+always wondered how I could use this data for something useful—or at the very
 least, prank my friends.
 
 Last year I tried a few different approaches to fine tune a model using the chat
-data, but I didn't work all that well. Fine tuning a model on commodity hardware
-is a challenge in itself and the results were underwhelming. So I dropped that
-idea for a while. While going through the material for the
+data, but it didn't work all that well. Fine‑tuning a model on commodity
+hardware is a challenge in itself and the results were underwhelming. So I
+dropped that idea for a while. While going through the material for the
 [HuggingFace Agents Course](https://huggingface.co/learn/agents-course/unit2/llama-index/components)
 though, it became very clear that RAG (Retrieval Augmented Generation) would be
 a perfect fit for what I was trying to do.
 
 This post shows how easy it is to set up a RAG on top of your WhatsApp chat
 logs. You are going to export your messages, parse the .txt files, index them
-with LlamaIndex, generate embeddings and store them to DuckDB, and ask questions
+with LlamaIndex, generate embeddings and store them in DuckDB, and ask questions
 locally running Ollama. You’ll end with a small chat application that you can
-talk and ask questions about your conversation log. The best part is that
+use to ask questions about your conversation log. The best part is that
 everything can run from your local machine, so you don't have to upload any of
-this sensitive data to cloud providers.
+this sensitive data to the cloud.
 
-## Rag, embeddings, and vector databases
+## RAG, embeddings, and vector databases
 
-Before diving in the implementation, here are some definitions of key concepts
+Before diving into the implementation, here are some definitions of key concepts
 used in this experiment:
 
 - RAG: Retrieval‑Augmented Generation; first retrieves relevant chunks from your
@@ -149,7 +148,7 @@ chunks, calculates the embeddings, and persists everything to DuckDB:
 After running this once, the built index is persisted and can be opened later
 for querying without reprocessing the input files.
 
-To run the script you can use this command:
+To run the script, use:
 
 ```shell
 uv run ingest.py
@@ -211,17 +210,18 @@ This file wires the stored index to an LLM and a simple chat UI:
 
 - Embed model: here the embedding model is loaded on the CPU to save VRAM for
   the LLM model. Also, only the user's prompt needs to be processed so using the
-  GPU won't give you a lot of performance improvements.
+  GPU won't provide much performance benefit.
 - Load index: `DuckDBVectorStore.from_local("./data/duck.db")` reopens the
   previously persisted vectors, and `VectorStoreIndex.from_vector_store(...)`
   prepares a retriever over them using the same embedding model.
 - Local LLM: `Ollama(model="gpt-oss:20b")` runs a local model for generation.
   You can replace it with another Ollama model (e.g., `llama3`) if preferred.
   Make sure to configure an appropriate context window that fits in your
-  hardware budget. I'm using a GeForce RTX 4060Ti 16 GB, so 10k was the right
-  number to fit the model, system prompt, the RAG context, and the user prompt.
+  hardware budget. I'm using a GeForce RTX 4060 Ti 16 GB, so 10k tokens was the
+  right number to fit the model, system prompt, the RAG context, and the user
+  prompt.
 - Chat engine: `index.as_chat_engine(...)` handles retrieval‑augmented
-  generation with `top_k=5` similar chunks and a concise system prompt.
+  generation, retrieving 5 similar chunks, with a concise system prompt.
 - Streaming: `engine.stream_chat(...)` yields tokens as they are generated; the
   `stream` function accumulates and streams them back to Gradio for a live UI.
 - History: Incoming `history` messages are converted to `ChatMessage`s so the
@@ -233,9 +233,9 @@ This file wires the stored index to an LLM and a simple chat UI:
 uv run main.py
 ```
 
-Once launched, type a question like “Is there any discussions of a ski trip?”
-and the assistant retrieves relevant messages from your chats and answer
-grounded on those snippets.
+Once launched, type a question like “Are there any discussions of a ski trip?”
+The assistant retrieves relevant messages from your chats and answers grounded
+in those snippets.
 
 ## Where to go from here
 
@@ -243,19 +243,19 @@ Here are some ideas on how to improve on this example:
 
 - Play around with different LLM and embedding models.
 - Tune the `system_prompt`, `chunk_size`, `top_k`, and the `context_window`
-  values according to your hardware, and compare which combination deliver the
+  values according to your hardware, and compare which combinations deliver the
   most reliable results.
-- Turn the application into an agent. So far, the application only one-shots the
-  model with the appropriate context. You can improve its results by using an
-  agentic loop to retrieve the information. This can be achieved by transforming
-  the query engine into a tool using the `QueryEngineTool` and `AgentWorkflow`
-  classes both from LlamaIndex.
+- Turn the application into an agent. So far, the application only performs a
+  single‑shot call to the model with the retrieved context. You can improve
+  results by using an agentic loop to retrieve information. This can be achieved
+  by transforming the query engine into a tool using the `QueryEngineTool` and
+  `AgentWorkflow` classes, both from LlamaIndex.
 
 ## Wrap‑up
 
 With a few dozen lines of parsing and LlamaIndex’s indexing/query APIs, you get
-a private, semantic interface to your WhatsApp history. This example is also not
-limited to WhatsApp chats, you can easily adapt to other file formats using
-LlamaIndex provided
+a private, semantic interface to your WhatsApp history. This example isn’t
+limited to WhatsApp chats; you can easily adapt it to other file formats using
+LlamaIndex‑provided
 [parsers](https://docs.llamaindex.ai/en/stable/module_guides/loading/node_parsers/modules/).
 I highly recommend checking it out.
