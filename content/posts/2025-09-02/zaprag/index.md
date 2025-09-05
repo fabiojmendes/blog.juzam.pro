@@ -94,11 +94,36 @@ index = VectorStoreIndex.from_documents(
 )
 ```
 
+The script loads your exported `.txt` chats, splits them into retrieval‑friendly
+chunks, calculates the embeddings, and persists everything to DuckDB:
+
+- Vector store: `DuckDBVectorStore("duck.db", persist_dir="./data/")` stores
+  both vectors and metadata on disk under `./data/`, so you can reuse the index
+  without re‑ingesting.
+- Embeddings: `BAAI/bge-m3` is a strong multilingual embedding model that runs
+  locally via Hugging Face. You can swap it for a smaller/faster model if
+  needed.
+- Chunking: `TokenTextSplitter(chunk_size=512, separator="\r\n")` breaks the raw
+  chat text along line breaks, keeping messages together while limiting token
+  length for better retrieval.
+- Reader: `SimpleDirectoryReader("./input/")` loads every `.txt` file in the
+  folder and attaches basic file metadata (e.g., filename).
+- Index build: `VectorStoreIndex.from_documents(...)` generates embeddings for
+  each chunk and writes them to DuckDB with progress reporting.
+
+After running this once, the built index is persisted and can be opened later
+for querying without reprocessing the input files.
+
+To run the script you can use this command:
+
 ```shell
 uv run ingest.py
 ```
 
 ## Main chat app
+
+Next, you have the actual RAG application that uses the index generated on the
+previous step.
 
 ```python
 import gradio
@@ -147,9 +172,31 @@ chat = gradio.ChatInterface(
 ).launch()
 ```
 
+This file wires the stored index to an LLM and a simple chat UI:
+
+- Load index: `DuckDBVectorStore.from_local("./data/duck.db")` reopens the
+  previously persisted vectors, and `VectorStoreIndex.from_vector_store(...)`
+  prepares a retriever over them using the same embedding model.
+- Local LLM: `Ollama(model="gpt-oss:20b")` runs a local model for generation.
+  You can replace it with another Ollama model (e.g., `llama3`) if preferred.
+- Chat engine: `index.as_chat_engine(...)` handles retrieval‑augmented
+  generation with `top_k=5` similar chunks and a concise system prompt.
+- Streaming: `engine.stream_chat(...)` yields tokens as they are generated; the
+  `stream` function accumulates and streams them back to Gradio for a live UI.
+- History: Incoming `history` messages are converted to `ChatMessage`s so the
+  LLM can keep context across turns.
+- UI: `gradio.ChatInterface` provides a minimal chat app you can open in the
+  browser. Title is arbitrary—rename freely.
+
+Once launched, type a question like “When did we discuss the ski trip?” and the
+assistant retrieves relevant messages from your chats and answer grounded on
+those snippets.
+
 ```shell
 uv run main.py
 ```
+
+## Cleanup
 
 WhatsApp exports vary by locale (date order, 12/24h time) and platform. We’ll
 use a tolerant regex and the `dateutil` parser, and we’ll stitch multi‑line
@@ -157,167 +204,6 @@ messages back together.
 
 Create a parser that yields LlamaIndex `Document`s—one per chat—containing
 formatted message lines and useful metadata per document.
-
-```python
-# rag_whatsapp.py (parser + indexing + query)
-from __future__ import annotations
-
-import re
-from pathlib import Path
-from dataclasses import dataclass
-from datetime import datetime
-from typing import List, Tuple
-from dateutil import parser as dateparser
-
-from llama_index.core import Document, VectorStoreIndex, StorageContext, Settings, load_index_from_storage
-from llama_index.core.node_parser import SentenceSplitter
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-
-# Optional: local LLM via Ollama (uncomment if you have it)
-# from llama_index.llms.ollama import Ollama
-
-# Optional: OpenAI (if you prefer cloud)
-# from llama_index.llms.openai import OpenAI
-# from llama_index.embeddings.openai import OpenAIEmbedding
-
-
-@dataclass
-class Message:
-    ts: datetime
-    sender: str
-    text: str
-
-
-MSG_RE = re.compile(
-    r"^(?P<date>\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}),?\s+"
-    r"(?P<time>\d{1,2}:\d{2}(?:\s?[AP]M)?)\s+-\s+"
-    r"(?P<sender>[^:]+):\s+(?P<text>.*)$"
-)
-
-
-def parse_export(path: Path) -> List[Message]:
-    messages: List[Message] = []
-    current: Tuple[datetime, str, List[str]] | None = None  # (ts, sender, lines)
-
-    def flush_current():
-        nonlocal current
-        if current is None:
-            return
-        ts, sender, lines = current
-        text = "\n".join(lines).strip()
-        messages.append(Message(ts=ts, sender=sender.strip(), text=text))
-        current = None
-
-    with path.open("r", encoding="utf-8", errors="ignore") as f:
-        for raw in f:
-            line = raw.rstrip("\n")
-            m = MSG_RE.match(line)
-            if m:
-                # New message header
-                flush_current()
-                when = f"{m.group('date')} {m.group('time')}"
-                # Try parsing with both dayfirst variants to handle locales
-                ts = None
-                for dayfirst in (True, False):
-                    try:
-                        ts = dateparser.parse(when, dayfirst=dayfirst)
-                        break
-                    except Exception:
-                        pass
-                if ts is None:
-                    # Fallback: skip this line
-                    continue
-                current = (ts, m.group("sender"), [m.group("text")])
-            else:
-                # Continuation of previous message or system line; attach
-                if current is None:
-                    # Some exports contain preamble lines; skip
-                    continue
-                current[2].append(line)
-
-    flush_current()
-    return messages
-
-
-def load_chats(dir_path: Path) -> List[Document]:
-    docs: List[Document] = []
-    for file in sorted(dir_path.glob("*.txt")):
-        msgs = parse_export(file)
-        if not msgs:
-            continue
-        msgs.sort(key=lambda m: m.ts)
-        lines = [f"[{m.ts:%Y-%m-%d %H:%M}] {m.sender}: {m.text}" for m in msgs]
-        text = "\n".join(lines)
-        meta = {
-            "chat": file.stem,
-            "start": msgs[0].ts.isoformat(),
-            "end": msgs[-1].ts.isoformat(),
-            "messages": len(msgs),
-        }
-        docs.append(Document(text=text, metadata=meta))
-    return docs
-
-
-def build_or_load_index(data_dir: Path, storage_dir: Path) -> VectorStoreIndex:
-    storage_dir.mkdir(parents=True, exist_ok=True)
-
-    # Configure models (local, privacy‑friendly defaults)
-    Settings.embed_model = HuggingFaceEmbedding(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
-    )
-    # If you have Ollama running locally, uncomment to answer with a local LLM
-    # Settings.llm = Ollama(model="llama3", request_timeout=60.0)
-
-    if any(storage_dir.iterdir()):
-        storage_context = StorageContext.from_defaults(persist_dir=str(storage_dir))
-        return load_index_from_storage(storage_context)
-
-    docs = load_chats(data_dir)
-    if not docs:
-        raise SystemExit(f"No .txt exports found in {data_dir}")
-
-    # Chunking setup
-    Settings.node_parser = SentenceSplitter(chunk_size=800, chunk_overlap=80)
-
-    index = VectorStoreIndex.from_documents(docs, show_progress=True)
-    index.storage_context.persist(persist_dir=str(storage_dir))
-    return index
-
-
-def ask(index: VectorStoreIndex, question: str, top_k: int = 6):
-    # Simple query engine; you can add postprocessors/filters later
-    qe = index.as_query_engine(similarity_top_k=top_k)
-    return qe.query(question)
-
-
-if __name__ == "__main__":
-    import argparse
-
-    p = argparse.ArgumentParser(description="WhatsApp RAG over exports")
-    p.add_argument("question", nargs="?", help="Question to ask")
-    p.add_argument("--data", default="data/whatsapp_exports", help="Folder with .txt exports")
-    p.add_argument("--store", default="storage", help="Index storage folder")
-    p.add_argument("--top_k", type=int, default=6, help="Retriever top_k")
-    args = p.parse_args()
-
-    data_dir = Path(args.data)
-    storage_dir = Path(args.store)
-    index = build_or_load_index(data_dir, storage_dir)
-
-    if not args.question:
-        print("Index ready. Ask a question, e.g.:\n  python rag_whatsapp.py \"When did we schedule dentist?\"")
-    else:
-        resp = ask(index, args.question, top_k=args.top_k)
-        print("\nAnswer:\n", str(resp))
-        print("\nSources:")
-        for i, sn in enumerate(resp.source_nodes, 1):
-            meta = sn.metadata or {}
-            print(f"  [{i}] chat={meta.get('chat')} score={sn.score:.3f}")
-            # Print a short preview
-            preview = sn.text.strip().splitlines()[:3]
-            for pl in preview:
-                print("     ", pl)
-```
 
 Notes:
 
@@ -332,75 +218,12 @@ Notes:
 
 If you prefer OpenAI for LLM/embeddings, configure instead:
 
-```python
-# Settings.llm = OpenAI(model="gpt-4o-mini")
-# Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")
-```
-
 ## 3) First queries (CLI)
 
 Build the index and ask:
 
-```shell
-uv run rag_whatsapp.py "When did we confirm the dentist appointment?"
-uv run rag_whatsapp.py "Share the address Fabio sent for dinner"
-uv run rag_whatsapp.py "Summarize the last 2 weeks from the family group"
-```
-
 If you didn’t enable an LLM (Ollama/OpenAI), the answer may be terse; you’ll
 still see relevant source snippets. Enable a model to get fluent answers.
-
-## 4) Optional: tiny Streamlit UI
-
-Add a minimal local UI to ask questions and inspect sources.
-
-```python
-# app.py
-from pathlib import Path
-import streamlit as st
-from llama_index.core import StorageContext, load_index_from_storage, Settings
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-
-# Optional LLMs
-# from llama_index.llms.ollama import Ollama
-
-STORAGE = Path("storage")
-
-@st.cache_resource(show_spinner=False)
-def load_index():
-    Settings.embed_model = HuggingFaceEmbedding(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
-    )
-    # Settings.llm = Ollama(model="llama3", request_timeout=60.0)
-    sc = StorageContext.from_defaults(persist_dir=str(STORAGE))
-    return load_index_from_storage(sc)
-
-
-st.set_page_config(page_title="WhatsApp RAG", page_icon="💬", layout="wide")
-st.title("WhatsApp RAG 💬🔎")
-
-idx = load_index()
-q = st.text_input("Ask a question", placeholder="When did we confirm the dentist appointment?")
-top_k = st.slider("Results", 3, 12, 6)
-
-if q:
-    qe = idx.as_query_engine(similarity_top_k=top_k)
-    with st.spinner("Thinking..."):
-        resp = qe.query(q)
-    st.subheader("Answer")
-    st.write(str(resp))
-
-    st.subheader("Sources")
-    for i, sn in enumerate(resp.source_nodes, 1):
-        with st.expander(f"[{i}] chat={sn.metadata.get('chat')} score={sn.score:.3f}"):
-            st.code(sn.text, language="")
-```
-
-Run:
-
-```shell
-uv run streamlit run app.py
-```
 
 ## Privacy, accuracy, and scale
 
