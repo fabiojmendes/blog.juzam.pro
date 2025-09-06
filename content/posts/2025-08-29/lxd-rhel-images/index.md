@@ -155,14 +155,14 @@ definitive solution.
 After spending some time experimenting with kernel upgrades on both Fedora and
 Rocky, I managed to come up with a solution.
 
-First, determine if the prefix name of the configuration files under
-`/boot/loader/entries` match the output of `systemd-machine-id-setup --print`. I
-believe that due to the way the image gets generated the machine id gets reset
-on first boot of the actual VM. That causes an unrelated issue where after the
-kernel update, the machine boots on the older kernel.
+First, check whether the filename prefix of the entries under
+`/boot/loader/entries` matches the output of `systemd-machine-id-setup --print`.
+I believe that, due to the way the image is generated, the machine ID is reset
+on the VM’s first boot. This causes an unrelated issue where, after a kernel
+update, the machine boots into the older kernel.
 
-Moving to the root filesystem issue, you have to determine the UUID of the
-`rootfs` device using `blkid`:
+For the root filesystem issue, determine the UUID of the `rootfs` device using
+`blkid`:
 
 ```shell
 blkid
@@ -172,7 +172,7 @@ Take note of the `UUID` value for the partition labeled as `rootfs`.
 
 ### Rocky
 
-On rocky or similar distros you can use `grubby` to update the boot
+On Rocky and similar distros, you can use `grubby` to update the boot
 configuration.
 
 ```shell
@@ -181,8 +181,8 @@ grubby --update-kernel ALL --args 'root=UUID=11111111-2222-3333-4444-55555555555
 
 ### Fedora
 
-Fedora doesn't ship with grubby by default, but the same can achieve the same by
-updating `/etc/default/grub` and add the following key:
+Fedora doesn't ship with `grubby` by default, but you can achieve the same
+result by updating `/etc/default/grub` and adding the following setting:
 
 ```text
 # Set device UUID
