@@ -10,6 +10,8 @@ This post explains the root cause and shows how to fix the boot entry, and get t
 image = "cover.svg"
 +++
 
+> Update 2025-09-05: Added a section for fixes for Fedora and Rocky Linux
+
 I've gone through a few iterations of tools to manage the VMs in my homelab:
 VirtualBox, Vagrant, Proxmox—you name it. Even a cobbled‑together solution with
 Libvirt, qcow2 images, and a
@@ -83,7 +85,7 @@ title Rocky Linux (5.14.0-570.25.1.el9_6.x86_64) 9.6 (Blue Onyx)
 version 5.14.0-570.25.1.el9_6.x86_64
 linux /boot/vmlinuz-5.14.0-570.25.1.el9_6.x86_64
 initrd /boot/initramfs-5.14.0-570.25.1.el9_6.x86_64.img
-options root=UUID=3f7470e9-ff2f-448f-8bd7-97f573f9b597 ro console=tty1 console=ttyS0
+options root=UUID=11111111-2222-3333-4444-555555555555 ro console=tty1 console=ttyS0
 grub_users $grub_users
 grub_arg --unrestricted
 grub_class rocky
@@ -94,7 +96,7 @@ in the `options` section with the correct UUID for your root device. In my case,
 this would be:
 
 ```text
-options root=UUID=3f7470e9-ff2f-448f-8bd7-97f573f9b597 ro console=tty1 console=ttyS0
+options root=UUID=11111111-2222-3333-4444-555555555555 ro console=tty1 console=ttyS0
 ```
 
 You can use a working entry—usually the previous kernel's—as a reference to
@@ -147,3 +149,42 @@ This is a quick workaround to get you up and running again. Ideally, whatever
 generates the entry file would set the correct root parameter, but I'm not sure
 where this is configured. I'll update this post in the future if I find a
 definitive solution.
+
+## Fix
+
+After spending some time experimenting with kernel upgrades on both Fedora and
+Rocky, I managed to come up with a solution.
+
+First, determine if the prefix name of the configuration files under
+`/boot/loader/entries` match the output of `systemd-machine-id-setup --print`. I
+believe that due to the way the image gets generated the machine id gets reset
+on first boot of the actual VM. That causes an unrelated issue where after the
+kernel update, the machine boots on the older kernel.
+
+Moving to the root filesystem issue, you have to determine the UUID of the
+`rootfs` device using `blkid`:
+
+```shell
+blkid
+```
+
+Take note of the `UUID` value for the partition labeled as `rootfs`.
+
+### Rocky
+
+On rocky or similar distros you can use `grubby` to update the boot
+configuration.
+
+```shell
+grubby --update-kernel ALL --args 'root=UUID=11111111-2222-3333-4444-555555555555'
+```
+
+### Fedora
+
+Fedora doesn't ship with grubby by default, but the same can achieve the same by
+updating `/etc/default/grub` and add the following key:
+
+```text
+# Set device UUID
+GRUB_DEVICE_UUID="11111111-2222-3333-4444-555555555555"
+```
